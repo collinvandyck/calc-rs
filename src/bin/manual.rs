@@ -84,10 +84,10 @@ fn eval(s: &str) -> Result<f64> {
             match stack.drain(3).as_slice() {
                 [Tok::Num(v1), Tok::Op(op), Tok::Num(v2)] => {
                     let num = match op {
-                        '+' => *v1 + *v2,
-                        '-' => *v1 - *v2,
-                        '*' => *v1 * *v2,
-                        '/' => *v1 / *v2,
+                        '+' => v1 + v2,
+                        '-' => v1 - v2,
+                        '*' => v1 * v2,
+                        '/' => v1 / v2,
                         _ => bail!("invalid op: {op:?}"),
                     };
                     stack.push(Tok::Num(num));

@@ -77,7 +77,7 @@ fn eval(s: &str) -> Result<f64> {
                 stack.push(Tok::Op(ch));
                 pos += 1;
             }
-            ' ' | '\n' => pos += 1,
+            ch if ch.is_whitespace() => pos += 1,
             _ => bail!("bad ch: {ch:?}"),
         }
         if stack.len() >= 3 {

@@ -1,5 +1,4 @@
 use anyhow::{Context, Result, bail};
-use core::panic;
 use std::rc::Rc;
 
 fn main() {
@@ -131,11 +130,15 @@ impl ExprVisitor for Interpreter {
         let left = left.visit(self)?;
         let right = right.visit(self)?;
         match (left, right, *op) {
-            (Value::F64(v1), Value::F64(v2), TokTyp::Plus) => Ok(Value::F64(v1 + v2)),
-            (Value::F64(v1), Value::F64(v2), TokTyp::Minus) => Ok(Value::F64(v1 - v2)),
-            (Value::F64(v1), Value::F64(v2), TokTyp::Star) => Ok(Value::F64(v1 * v2)),
-            (Value::F64(v1), Value::F64(v2), TokTyp::Slash) => Ok(Value::F64(v1 / v2)),
-            _ => bail!("invalid math: {add:?}"),
+            (Value::F64(v1), Value::F64(v2), op) => {
+                match op {
+                    TokTyp::Plus => Ok(Value::F64(v1 + v2)),
+                    TokTyp::Minus => Ok(Value::F64(v1 - v2)),
+                    TokTyp::Star => Ok(Value::F64(v1 * v2)),
+                    TokTyp::Slash => Ok(Value::F64(v1 / v2)),
+                    _ => bail!("invalid op: {op:?}"),
+                }
+            }
         }
     }
 
@@ -154,6 +157,13 @@ impl Parser {
         Self { toks, pos: 0 }
     }
     fn parse(&mut self) -> Result<SharedExpr> {
+        let res = self.expr()?;
+        if !self.eof() {
+            bail!("trailing input: {}", self.rest_str());
+        }
+        Ok(res)
+    }
+    fn expr(&mut self) -> Result<SharedExpr> {
         self.group()
     }
     fn group(&mut self) -> Result<SharedExpr> {
@@ -167,8 +177,8 @@ impl Parser {
     fn math(&mut self) -> Result<SharedExpr> {
         if self.matches([TokTyp::Plus, TokTyp::Minus, TokTyp::Slash, TokTyp::Star]) {
             let op = self.prev().typ;
-            let left = self.parse()?;
-            let right = self.parse()?;
+            let left = self.expr()?;
+            let right = self.expr()?;
             let add = Expr::Math(Rc::new(MathExpr { left, right, op }));
             return Ok(Rc::new(add));
         }
@@ -201,6 +211,22 @@ impl Parser {
         }
         false
     }
+    #[allow(unused)]
+    fn debug(&mut self, op: &str) {
+        println!("{op} {}", self.rest_str());
+    }
+    fn rest_str(&self) -> String {
+        self.rest()
+            .iter()
+            .map(ToString::to_string)
+            .collect()
+    }
+    fn rest(&self) -> &[Tok] {
+        &self.toks[self.pos..]
+    }
+    fn eof(&self) -> bool {
+        self.pos >= self.toks.len()
+    }
     fn advance(&mut self) {
         self.pos += 1;
     }
@@ -208,6 +234,7 @@ impl Parser {
         &self.toks[self.pos]
     }
 }
+
 struct Lexer {
     chars: Vec<char>,
     toks: Vec<Tok>,

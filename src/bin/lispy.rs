@@ -1,10 +1,10 @@
-#![allow(unused)]
-
 use anyhow::{Context, Result, bail};
 use core::panic;
 use std::rc::Rc;
 
 fn main() {
+    assert_eq!(eval("(+ 3 8)").unwrap().to_f64(), Some(11.0));
+    assert_eq!(eval("(+ 3 (* 8 4))").unwrap().to_f64(), Some(35.0));
 }
 
 type SharedExpr = Rc<Expr>;
@@ -47,7 +47,7 @@ struct Tok {
 
 impl std::fmt::Display for Tok {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let Tok { lexeme, typ, val } = self;
+        let Tok { lexeme, val, .. } = self;
         if let Some(val) = val {
             write!(f, "{val}")
         } else {
@@ -204,9 +204,6 @@ impl Parser {
     fn advance(&mut self) {
         self.pos += 1;
     }
-    fn eof(&self) -> bool {
-        self.pos >= self.toks.len()
-    }
     fn cur(&self) -> &Tok {
         &self.toks[self.pos]
     }
@@ -284,8 +281,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_add() {
-        assert_eq!(eval("(+ 3 8)").unwrap().to_f64(), Some(11.0));
-        assert_eq!(eval("(+ 3 (* 8 4))").unwrap().to_f64(), Some(35.0));
+    fn test() {
+        main();
     }
 }

@@ -1,14 +1,25 @@
 use anyhow::{Context, Result, bail};
+use itertools::Itertools;
 use std::rc::Rc;
 
 fn main() {
-    assert_eq!(eval("(+ 3 8)").unwrap().to_f64(), Some(11.0));
-    assert_eq!(eval("(+ 3 (* 8 4))").unwrap().to_f64(), Some(35.0));
+    macro_rules! assert_eval {
+        ($e:expr, $ex: expr) => {
+            assert_eq!(eval($e).unwrap().must_f64(), $ex);
+        };
+    }
+    assert_eval!("3", 3.0);
+    assert_eval!("((((3))))", 3.0);
+    assert_eval!("(3) * 4", 12.0);
+    assert_eval!("3 * ((4/2) + (3))", 15.0);
+    assert_eval!("3+4", 7.0);
+    assert_eval!("3+4 + 3", 10.0);
+    assert_eval!("3*(4 + 3)", 21.0);
 }
 
 type SharedExpr = Rc<Expr>;
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
 enum Expr {
     Group(Rc<GroupExpr>),
     Math(Rc<MathExpr>),
@@ -25,7 +36,7 @@ impl Expr {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
 struct MathExpr {
     op: TokTyp,
     left: SharedExpr,
@@ -55,7 +66,7 @@ impl std::fmt::Display for Tok {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 enum TokTyp {
     LeftParen,
     RightParen,
@@ -66,15 +77,30 @@ enum TokTyp {
     Number,
 }
 
+impl std::fmt::Debug for TokTyp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            TokTyp::LeftParen => "(",
+            TokTyp::RightParen => ")",
+            TokTyp::Plus => "+",
+            TokTyp::Star => "*",
+            TokTyp::Slash => "/",
+            TokTyp::Minus => "-",
+            TokTyp::Number => "NUM",
+        };
+        write!(f, "{s}")
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 enum Value {
     F64(f64),
 }
 
 impl Value {
-    fn to_f64(&self) -> Option<f64> {
+    fn must_f64(&self) -> f64 {
         match self {
-            Value::F64(v) => Some(*v),
+            Value::F64(v) => *v,
         }
     }
 }
@@ -159,28 +185,31 @@ impl Parser {
     fn parse(&mut self) -> Result<SharedExpr> {
         let res = self.expr()?;
         if !self.eof() {
-            bail!("trailing input: {}", self.rest_str());
+            bail!("parse: trailing input: {}", self.rest_str());
         }
         Ok(res)
     }
     fn expr(&mut self) -> Result<SharedExpr> {
-        self.group()
-    }
-    fn group(&mut self) -> Result<SharedExpr> {
-        if self.matches([TokTyp::LeftParen]) {
-            let next = self.math()?;
-            self.consume(TokTyp::RightParen)?;
-            return Ok(Rc::new(Expr::Group(Rc::new(GroupExpr { expr: next }))));
-        }
         self.math()
     }
     fn math(&mut self) -> Result<SharedExpr> {
-        if self.matches([TokTyp::Plus, TokTyp::Minus, TokTyp::Slash, TokTyp::Star]) {
-            let op = self.prev().typ;
-            let left = self.expr()?;
-            let right = self.expr()?;
-            let add = Expr::Math(Rc::new(MathExpr { left, right, op }));
-            return Ok(Rc::new(add));
+        let mut left = self.group()?;
+        loop {
+            if self.matches([TokTyp::Plus, TokTyp::Minus, TokTyp::Slash, TokTyp::Star]) {
+                let op = self.prev().typ;
+                let right = self.expr()?;
+                left = Rc::new(Expr::Math(Rc::new(MathExpr { left, right, op })));
+            } else {
+                break;
+            }
+        }
+        Ok(left)
+    }
+    fn group(&mut self) -> Result<SharedExpr> {
+        if self.matches([TokTyp::LeftParen]) {
+            let expr = self.expr()?;
+            self.consume(TokTyp::RightParen)?;
+            return Ok(Rc::new(Expr::Group(Rc::new(GroupExpr { expr }))));
         }
         self.value()
     }
@@ -203,10 +232,12 @@ impl Parser {
         Ok(())
     }
     fn matches(&mut self, typ: impl IntoIterator<Item = TokTyp>) -> bool {
-        for t in typ.into_iter() {
-            if self.cur().typ == t {
-                self.advance();
-                return true;
+        if !self.eof() {
+            for t in typ.into_iter() {
+                if self.cur().typ == t {
+                    self.advance();
+                    return true;
+                }
             }
         }
         false
@@ -219,7 +250,7 @@ impl Parser {
         self.rest()
             .iter()
             .map(ToString::to_string)
-            .collect()
+            .join(", ")
     }
     fn rest(&self) -> &[Tok] {
         &self.toks[self.pos..]

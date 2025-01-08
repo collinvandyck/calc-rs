@@ -11,7 +11,7 @@ fn main() {
     assert_eval!("3", 3.0);
     assert_eval!("((((3))))", 3.0);
     assert_eval!("(3) * 4", 12.0);
-    assert_eval!("3 * ((4/2) + (3))", 15.0);
+    assert_eval!("3 * ((4/2) + (3 + 1 - 1))", 15.0);
     assert_eval!("3+4", 7.0);
     assert_eval!("3+4 + 3", 10.0);
     assert_eval!("3*(4 + 3)", 21.0);
@@ -299,15 +299,13 @@ impl Lexer {
     }
     fn number(&mut self) -> Result<()> {
         let cur = self.pos;
+        let mut val = 0.0;
         while !self.eof() && self.cur().is_numeric() {
+            val = val * 10.0 + self.cur().to_digit(10).unwrap() as f64;
             self.advance();
         }
-        let s = self.chars[cur..self.pos]
-            .iter()
-            .collect::<String>();
-        let val = s.parse().context("parse f64")?;
         self.toks.push(Tok {
-            lexeme: s,
+            lexeme: self.chars[cur..self.pos].iter().collect(),
             typ: TokTyp::Number,
             val: Some(Value::F64(val)),
         });

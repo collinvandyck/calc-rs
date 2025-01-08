@@ -67,11 +67,12 @@ fn eval(s: &str) -> Result<f64> {
                 while pos < chars.len() && chars[pos].is_numeric() {
                     pos += 1;
                 }
-                let num: f64 = chars[cur..pos]
-                    .iter()
-                    .collect::<String>()
-                    .parse()?;
-                stack.push(Tok::Num(num));
+                stack.push(Tok::Num(
+                    chars[cur..pos]
+                        .iter()
+                        .collect::<String>()
+                        .parse()?,
+                ));
             }
             '+' | '-' | '*' | '/' => {
                 stack.push(Tok::Op(ch));
